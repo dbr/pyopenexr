@@ -111,8 +111,8 @@ class OpenEXR:
         # Remaining 3 bytes are unused boolean flags, should all be zero
         if [ord(x) for x in version_field[1:4]] != [0, 0, 0]:
             # Ignore them
-            print "Things not null"
-        f.read(3)
+            pass
+        
         ## Parse header
         # Header is a sequence of attributes, then a null byte (0x00)
         #
@@ -128,6 +128,8 @@ class OpenEXR:
         # "type": string
         # "size": 5
         # "value": hello
+        
+        f.read(3) # Required so there are not 3 null bytes, for some reason
         
         while 1:
             attr_name = read_null_term_str(f)
