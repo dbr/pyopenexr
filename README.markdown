@@ -1,4 +1,4 @@
-A parser for [OpenEXR](http://www.openexr.com/) files, implemented purely in Python.
+A parser for [OpenEXR](http://www.openexr.com/) image files, implemented purely in Python.
 
 This is not designed to be fast, or complete. It is written to learn about the OpenEXR file format.
 
