@@ -260,11 +260,9 @@ class OpenEXR:
         
         
         
-for cur_filename in ["blah_scanline_none.exr",
-                     "blah_scanline_zip.exr",
-                     "blah_block_zip.exr", 
-                     "table.56.exr",
-                     "goldfish.020.exr"]:
+for cur_filename in ["tests/blah_scanline_none.exr",
+                     "tests/blah_scanline_zip.exr",
+                     "tests/blah_block_zip.exr"]:
     print
     print
     print "*" * 5,  cur_filename, "*" * 5
@@ -274,10 +272,10 @@ for cur_filename in ["blah_scanline_none.exr",
     exr = OpenEXR()
     exr.parse_headers(current_file)
     
-    # print "version:", exr.version
-    # print "headers:"
+    print "version:", exr.version
+    print "headers:"
     from pprint import pprint
-    # pprint(exr.headers)
+    pprint(exr.headers)
     
     try:
         print "Prasing data"
