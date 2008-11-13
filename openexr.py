@@ -5,17 +5,53 @@
 import struct
 
 ## Definitons
-COMPRESSION = {
-    0 : 'NO_COMPRESSION',
-    1 : 'RLE_COMPRESSION',
-    2 : 'ZIPS_COMPRESSION',
-    3 : 'ZIP_COMPRESSION',
-    4 : 'PIZ_COMPRESSION',
-    5 : 'PXR24_COMPRESSION',
-    6 : 'B44_COMPRESSION',
-    7 : 'B44A_COMPRESSION'
-}
 
+class Compression:
+    NO = 0
+    RLE = 1
+    ZIPS = 2
+    ZIP = 3
+    PIZ = 4
+    PXR24 = 5
+    B44 = 6
+    B44A = 7
+    
+    LOOKUP = ["NO", "RLE", "ZIPS", "ZIP", "PIZ", "PXR24", "B44", "B44A"]
+    
+    def __init__(self, value):
+        self.value = value
+        self.name = self.LOOKUP[value]
+    
+    def __repr__(self):
+        return self.LOOKUP[self.value]
+
+class LineOrder:
+    INCREASING_Y = 0
+    DECREASING_Y = 1
+    RANDOM_Y = 2
+    
+    LOOKUP = ["INCREASING_Y", "DECREASING_Y", "RANDOM_Y"]
+    
+    def __init__(self, value):
+        self.value = value
+        self.name = self.LOOKUP[value]
+    
+    def __repr__(self):
+        return self.name
+
+class PixelType:
+    UINT = 0
+    HALF = 1
+    FLOAT = 2
+    
+    LOOKUP = ["UINT", "HALF", "FLOAT"]
+    
+    def __init__(self, value):
+        self.value = value
+        self.name = self.LOOKUP[value]
+    
+    def __repr__(self):
+        return self.name
 
 ## Exceptions
 class NotAnExr(Exception):
@@ -23,6 +59,8 @@ class NotAnExr(Exception):
 class UnsupportedVersion(Exception):
     pass
 class UnimplementedDatatype(Exception):
+    pass
+class UnimplementedCompression(Exception):
     pass
 
 ## Helpers
@@ -39,7 +77,7 @@ def read_null_term_str(f):
             cur_str.append(cur_byte)
 
 def _parse_datatype(datatype, value):
-    known = ["string", "float", "compression", "box2i"]
+    known = ["string", "float", "compression", "box2i", "lineOrder", "chlist"]
 
     if datatype not in known:
         raise UnimplementedDatatype(
@@ -53,7 +91,8 @@ def _parse_datatype(datatype, value):
         return struct.unpack('f', value)[0]
 
     if datatype == "compression":
-        return COMPRESSION[ord(value)]
+        # return COMPRESSION[ord(value)]
+        return Compression(ord(value))
     
     if datatype == "box2i":
         # box2i is 4 floats.
@@ -74,12 +113,57 @@ def _parse_datatype(datatype, value):
                 _parse_datatype("float", cur_float)
             )
         return ret
+    
+    if datatype == "lineOrder":
+        return LineOrder(ord(value))
+    
+    if datatype == "chlist":
+        from StringIO import StringIO
+        s = StringIO(value)
+        
+        # Channel layout:
+        # name (null terminated string)
+        # pixel type (int, UINT = 0, HALF = 1, FLOAT = 2)
+        # pLinear (char, either 0 or 1)
+        # reserved (3 char, should all be zero)
+        # xSampling (int)
+        # ySampling (int)
+        print len(value)
+        channels = []
+        while 1:
+            if not s.read(1):
+                break
+            s.seek(-1, 1)
+            
+            name = read_null_term_str(s)
+            pixel_type = ord(s.read(1))
+            pLinear = ord(s.read(1)) == True
+            reserved = s.read(3)
+            try:
+                xSampling = ord(s.read(1))
+                ySampling = ord(s.read(1))
+            except TypeError:
+                print "Skipping"
+                continue
+        
+            channels.append({
+                'name': name,
+                'pixel_type': pixel_type,
+                'pLinear': pLinear,
+                'xSampling': xSampling,
+                'ySampling': ySampling
+            })
+        
+        print channels
+        return channels
         
 ## Main class
 class OpenEXR:
     def __init__(self):
         self.headers = {}
         self.version = None
+        
+        self._end_of_header = -1
     
     def _set_header(self, name, attr_type, attr_value):
         self.headers[name] = {
@@ -87,8 +171,10 @@ class OpenEXR:
             'type': attr_type
         }
     
-    def parse(self, f):
+    def parse_headers(self, f):
         ## Check for "Magic Number"
+        # First four bytes of the file should be
+        # 0x76 0x2f 0x31 0x01
         magic_number = f.read(4)
         if not magic_number == str_hexseq([0x76, 0x2f, 0x31, 0x01]):
             raise NotAnExr("Could not find Magic Number")
@@ -143,29 +229,62 @@ class OpenEXR:
                 parsed_content = attr_content
             self._set_header(attr_name, attr_type, parsed_content)
             
-            # Check if next byte is null
+            # Check if next byte is null, if so, it's the end of the header
             end = f.read(1)
             f.seek(-1, 1)
             if ord(end) == 0x00:
-                # If so, this is the end of the header!
+                self._end_of_header = f.tell() # Store where headers end
                 break
+        #end while
+    
+    def parse_data(self, f):
+        if self._end_of_header == -1:
+            self.parse_headers(f)
+        
+        f.seek(self._end_of_header + 1) # Seek to end of headers
+        
+        if self.headers['compression']['value'].value == Compression.NO:
+            y_coord = ord(f.read(1))
+            data_size = ord(f.read(1))
+            print "Coord:", y_coord
+            print "size", data_size
+            data = f.read(data_size)
+            print [ord(x) for x in data]
+        elif self.headers['compression']['value'].value == Compression.PIZ:
+            print "PIZ!!"
+        else:
+            raise UnimplementedCompression("Cannot decompress %s" % (
+                self.headers['compression']['value'].name
+            ))
+    #end parsed
         
         
         
-for cur_filename in ["blah_scanline.exr",
-                     "blah_block.exr", 
+for cur_filename in ["blah_scanline_none.exr",
+                     "blah_scanline_zip.exr",
+                     "blah_block_zip.exr", 
                      "table.56.exr",
                      "goldfish.020.exr"]:
     print
     print
     print "*" * 5,  cur_filename, "*" * 5
     
+    print cur_filename
     current_file = open(cur_filename, "rb")
     exr = OpenEXR()
-    exr.parse(current_file)
-    print "version:", exr.version
-    print "headers:"
-    import pprint
-    pprint.pprint(exr.headers)
+    exr.parse_headers(current_file)
+    
+    # print "version:", exr.version
+    # print "headers:"
+    from pprint import pprint
+    # pprint(exr.headers)
+    
+    try:
+        print "Prasing data"
+        exr.parse_data(current_file)
+        print "..done"
+    except UnimplementedCompression, errormsg:
+        print "Error:"
+        print errormsg
     
     current_file.close()

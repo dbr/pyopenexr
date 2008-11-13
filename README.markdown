@@ -18,3 +18,4 @@ It also deals correctly with the following data-types:
 - float
 - compression
 - box2i
+- lineOrder
