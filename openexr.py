@@ -158,12 +158,14 @@ def _parse_datatype(datatype, value):
         return channels
 
 ## Main class
-class OpenEXR:
-    def __init__(self):
+class OpenEXR(object):
+    def __init__(self, fh):
+        self.fh = fh
+
         self.headers = {}
         self.version = None
 
-        self._end_of_header = -1
+        self._end_of_header = None
 
     def _set_header(self, name, attr_type, attr_value):
         self.headers[name] = {
@@ -171,7 +173,9 @@ class OpenEXR:
             'type': attr_type
         }
 
-    def parse_headers(self, f):
+    def parse_headers(self):
+        f = self.fh
+
         ## Check for "Magic Number"
         # First four bytes of the file should be
         # 0x76 0x2f 0x31 0x01
@@ -237,9 +241,11 @@ class OpenEXR:
                 break
         #end while
 
-    def parse_data(self, f):
-        if self._end_of_header == -1:
-            self.parse_headers(f)
+    def parse_data(self):
+        f = self.fh
+
+        if self._end_of_header is None:
+            self.parse_headers()
 
         f.seek(self._end_of_header + 1) # Seek to end of headers
 
@@ -260,17 +266,16 @@ class OpenEXR:
 
 
 if __name__ == "__main__":
-    for cur_filename in ["tests/blah_scanline_none.exr",
+    for fname in ["tests/blah_scanline_none.exr",
                          "tests/blah_scanline_zip.exr",
                          "tests/blah_block_zip.exr"]:
         print
         print
-        print "*" * 5,  cur_filename, "*" * 5
+        print "*" * 5,  fname, "*" * 5
 
-        print cur_filename
-        current_file = open(cur_filename, "rb")
-        exr = OpenEXR()
-        exr.parse_headers(current_file)
+        fh = open(fname, "rb")
+        exr = OpenEXR(fh)
+        exr.parse_headers()
 
         print "version:", exr.version
         print "headers:"
@@ -279,10 +284,10 @@ if __name__ == "__main__":
 
         try:
             print "Prasing data"
-            exr.parse_data(current_file)
+            exr.parse_data()
             print "..done"
         except UnimplementedCompression, errormsg:
             print "Error:"
             print errormsg
 
-        current_file.close()
+        fh.close()
