@@ -1,5 +1,4 @@
 #!/usr/bin/env python
-#encoding:utf-8
 #pylint:disable-msg=C0111,R0903
 
 import struct
